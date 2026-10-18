@@ -508,20 +508,42 @@ export function apply(ctx, config = {}) {
   }
 
   // 快照路由只在有浏览器面的部署里注册；headless/tui 无 webServer 时优雅跳过。
+  // ⚠️ 用 ctx.inject 等待可选服务就绪：apply 执行时 webServer 可能尚未提供，
+  //    直接 ctx.get('webServer') 会拿到 undefined 导致路由漏注册（2026-10-18 实机踩坑：
+  //    重启后 client 轮询 /api/project-board/snapshot 全 404，看板不显示）。
   try {
-    const webServer = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined
-    if (webServer && typeof webServer.register === 'function') {
-      ctx.effect(
-        () =>
-          webServer.register({
-            kind: 'prefix',
-            path: ROUTE_PREFIX,
-            handler,
-          }),
-        'dsh-project-dev: /api/project-board 路由',
-      )
+    if (typeof ctx.inject === 'function') {
+      ctx.inject(['webServer'], (webCtx) => {
+        try {
+          webCtx.effect(
+            () =>
+              webCtx.webServer.register({
+                kind: 'prefix',
+                path: ROUTE_PREFIX,
+                handler,
+              }),
+            'dsh-project-dev: /api/project-board 路由',
+          )
+        } catch (error) {
+          log(`注册快照路由失败：${errorText(error)}`)
+        }
+      })
     } else {
-      log('webServer 不可用：跳过快照路由（本部署无浏览器面）')
+      // 兜底：老版本 Cordis 没有 inject 时退回即时读取（可能拿不到服务）。
+      const webServer = typeof ctx.get === 'function' ? ctx.get('webServer') : undefined
+      if (webServer && typeof webServer.register === 'function') {
+        ctx.effect(
+          () =>
+            webServer.register({
+              kind: 'prefix',
+              path: ROUTE_PREFIX,
+              handler,
+            }),
+          'dsh-project-dev: /api/project-board 路由',
+        )
+      } else {
+        log('webServer 不可用：跳过快照路由（本部署无浏览器面）')
+      }
     }
   } catch (error) {
     log(`注册快照路由失败：${errorText(error)}`)

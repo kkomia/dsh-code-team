@@ -67,6 +67,8 @@ window.__ModuleLoader__.load({
     const zh = {
       'pill.label': '开发看板',
       'pill.expand': '展开开发进度看板',
+      'pill.waiting': '等待 Lead 入板',
+      'pill.errorRetry': '连接失败，重试中…',
       'pill.total': '共 {n} 项',
       'pill.running': '进行中 {n}',
       'pill.accepting': '待验收 {n}',
@@ -166,6 +168,8 @@ window.__ModuleLoader__.load({
     const en = {
       'pill.label': 'Dev board',
       'pill.expand': 'Expand development board',
+      'pill.waiting': 'Waiting for Lead',
+      'pill.errorRetry': 'Reconnecting…',
       'pill.total': '{n} items',
       'pill.running': '{n} active',
       'pill.accepting': '{n} to accept',
@@ -701,6 +705,32 @@ window.__ModuleLoader__.load({
       return null;
     }
 
+    /**
+     * 当前会话是否跑在「项目开发模式」上。
+     * 只用于「看板还没数据时是否显示一个等待中的胶囊」；拿不到就按否处理。
+     * @param {object} props slot props（含 useSessions 选择器 hook）
+     * @param {string|null} sessionId
+     * @returns {boolean}
+     */
+    function useIsProjectDevSession(props, sessionId) {
+      try {
+        const useSessions = props && props.useSessions;
+        if (typeof useSessions !== 'function' || typeof sessionId !== 'string' || sessionId === '') return false;
+        const preset = useSessions((state) => {
+          try {
+            const row = state && state.byId ? state.byId[sessionId] : undefined;
+            const values = row && row.projectionValues ? row.projectionValues : undefined;
+            return values ? values.agentPreset : undefined;
+          } catch (error) {
+            return undefined;
+          }
+        });
+        return preset === 'project-dev';
+      } catch (error) {
+        return false;
+      }
+    }
+
     /* ------------------------------------------------------------------ */
     /* 4. 样式（全部 class 带 pb- 前缀；颜色优先宿主 --dsw-alias-* token）     */
     /* ------------------------------------------------------------------ */
@@ -795,6 +825,8 @@ window.__ModuleLoader__.load({
   animation:pb-card-in var(--pb-motion-enter) var(--pb-ease-settle) both;
 }
 .pb-pill:hover{background:var(--pb-hover);border-color:var(--pb-border-hover);}
+.pb-pill-hint{cursor:default;}
+.pb-pill-hint:hover{background:var(--pb-surface);border-color:var(--pb-border);}
 .pb-pill:focus-visible{outline:2px solid var(--pb-accent);outline-offset:2px;}
 .pb-pill-dot{position:relative;flex:none;width:7px;height:7px;border-radius:50%;background:var(--pb-accent);}
 .pb-pill-dot[data-live=true]{animation:pb-dot-breathe 2400ms ease-in-out infinite;}
@@ -1866,6 +1898,8 @@ window.__ModuleLoader__.load({
       const snapshot = useBoardSnapshot(sessionId);
       const board = snapshot && snapshot.board && typeof snapshot.board === 'object' ? snapshot.board : null;
       const stale = !!snapshot && snapshot.status === 'stale';
+      /** 项目开发模式会话但看板还没数据/加载失败时，显示等待胶囊而不是整块消失。 */
+      const isProjectDevSession = useIsProjectDevSession(props, sessionId);
 
       const items = React.useMemo(() => {
         try {
@@ -2072,7 +2106,23 @@ window.__ModuleLoader__.load({
         }
       };
 
-      if (sessionId === null || !board) return null;
+      if (sessionId === null) return null;
+      if (!board) {
+        // 非项目开发模式会话：没有看板就完全不占空间（原行为）。
+        if (!isProjectDevSession) return null;
+        const hintText = snapshot && snapshot.status === 'error' ? safeT('pill.errorRetry') : safeT('pill.waiting');
+        return h('div', { className: 'pb-dock', 'data-pb-plugin': 'dsh-project-dev' },
+          h('div', {
+            className: 'pb-pill pb-pill-hint',
+            role: 'status',
+            'aria-live': 'polite',
+            title: hintText,
+          },
+            h('span', { className: 'pb-pill-dot', 'data-pb-tone': 'idle' }),
+            h('span', { className: 'pb-pill-label' }, safeT('pill.label')),
+            h('span', { className: 'pb-pill-sep' }),
+            h('span', { className: 'pb-pill-stat' }, hintText)));
+      }
 
       const effectivePos = pos || defaultPosition(anchorRef.current);
       const drag = {
