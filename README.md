@@ -116,6 +116,14 @@ node --test test/guard.test.mjs
 
 本机验证用 `node >= 22.19`（`node --test test/` 走 `test/index.js` 聚合入口）。
 
+### 已完成的真实验证
+
+- **33 条单测全绿**：本机与 GitHub Actions CI 均通过。
+- **真实 GUI**：项目开发模式会话可正常创建（SessionHeader `agentPreset=project-dev`）；7 个 `project_board_*` 工具全链路实测（open → add → dispatch → start → test/audit）；悬浮卡在真实会话中渲染、展开、条目详情与审计均正常。
+- **Lead 硬拦截（重启后复测）**：新 project-dev 会话里 `read/write` 的工具定义被替换为「⛔ 本模式禁用」占位描述，Lead 即使用户明确要求"允许违反一次"也拒绝调用；`ralph/subagent_codex` 完全不可见。详见 [docs/VERIFICATION.md](docs/VERIFICATION.md)。
+
+![重启后硬拦截复测](docs/shots/06-guard-after-restart.png)
+
 目录：
 
 ```
@@ -126,7 +134,7 @@ board-tools.js    preset 内 7 个 project_board_* 工具
 mode-guard.js     preset 内提示词 sections + 子智能体工具 restrict + best-effort 影子工具
 client.js         Client 悬浮看板（conversation.input.dock）
 cordis.patch.yml  profile 补丁：project-board / project-dev-guard / preset-project-dev
-docs/             DESIGN.md（设计规格）、PROTOCOL.md（字段契约）、MODE-TEXT.md（提示词正文）
+docs/             DESIGN.md（设计规格）、PROTOCOL.md（字段契约）、MODE-TEXT.md（提示词正文）、VERIFICATION.md（重启后复测记录）
 ```
 
 ## 已知限制
