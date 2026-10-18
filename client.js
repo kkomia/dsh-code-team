@@ -42,8 +42,8 @@ window.__ModuleLoader__.load({
     const EDGE_MARGIN = 8;
     /** 默认位置：对话区左上角、「智能体团队」条下方（用户 PB-007 要求；PB-008 胶囊也用同一初始位置）。 */
     const DEFAULT_TOP = 96;
-    /** 旧版本默认在右上角；v2 让旧 localStorage 位置作废；v3 让胶囊也参与拖动后重新记位。 */
-    const POS_KEY = 'project-board.pos.v3';
+    /** 旧版本默认在右上角；v2 让旧 localStorage 位置作废；v3 胶囊参与拖动记忆；v4 让开发期拖动测试的坐标作废、回到新默认。 */
+    const POS_KEY = 'project-board.pos.v4';
     const OPEN_KEY = 'project-board.open';
     const REWORK_ALERT = 2;
     const REF_STALE_MS = 14 * 24 * 60 * 60 * 1000;
