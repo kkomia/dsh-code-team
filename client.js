@@ -40,10 +40,10 @@ window.__ModuleLoader__.load({
     const MAX_BACKOFF_MS = 10000;
     const CARD_WIDTH = 420;
     const EDGE_MARGIN = 8;
-    /** 默认位置：对话区左上角、「智能体团队」条下方（用户 PB-007 要求）。 */
+    /** 默认位置：对话区左上角、「智能体团队」条下方（用户 PB-007 要求；PB-008 胶囊也用同一初始位置）。 */
     const DEFAULT_TOP = 96;
-    /** 旧版本默认在右上角；v2 让旧 localStorage 位置作废、回到新默认。 */
-    const POS_KEY = 'project-board.pos.v2';
+    /** 旧版本默认在右上角；v2 让旧 localStorage 位置作废；v3 让胶囊也参与拖动后重新记位。 */
+    const POS_KEY = 'project-board.pos.v3';
     const OPEN_KEY = 'project-board.open';
     const REWORK_ALERT = 2;
     const REF_STALE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -810,22 +810,25 @@ window.__ModuleLoader__.load({
   --pb-success:var(--dsw-alias-state-success-primary,#8cbf96);
 }
 .pb-root,.pb-root *,.pb-root *::before,.pb-root *::after{box-sizing:border-box;}
-/* 零宽锚点：测量本组件所在对话列左边界（PB-007 默认位置用），不占空间不响应事件 */
-.pb-anchor{display:inline-block;width:0;height:0;overflow:hidden;pointer-events:none;vertical-align:top;}
+/* 零宽锚点：测量本组件所在对话列左边界（默认位置用），不占空间不响应事件 */
+.pb-anchor{display:block;width:0;height:0;overflow:hidden;pointer-events:none;vertical-align:top;}
 .pb-mono{font-family:var(--pb-font-mono);font-variant-numeric:tabular-nums;letter-spacing:.01em;}
 .pb-muted{color:var(--pb-text-tertiary);font-size:11px;line-height:15px;}
 /* ================= 收起态：胶囊条（34px，§6.3） ================= */
-.pb-dock{display:inline-flex;align-items:center;max-width:100%;}
+/* 胶囊固定在视口坐标系里，位置与展开卡共用同一份 pos；可拖动、可记忆（用户 PB-008）。 */
+.pb-dock{display:contents;}
 .pb-pill{
-  display:inline-flex;align-items:center;gap:7px;max-width:100%;height:34px;padding:0 12px;
+  position:fixed;z-index:var(--pb-z);
+  display:inline-flex;align-items:center;gap:7px;max-width:calc(100vw - 16px);height:34px;padding:0 12px;
   border-radius:var(--pb-radius-pill);border:1px solid var(--pb-border);background:var(--pb-surface);
   color:var(--pb-text);font-family:var(--pb-font-sans);font-size:12px;line-height:16px;font-weight:500;
-  cursor:pointer;
+  cursor:grab;touch-action:none;user-select:none;
   transition:background-color var(--pb-motion-feedback) ease,border-color var(--pb-motion-feedback) ease,color var(--pb-motion-feedback) ease;
   animation:pb-card-in var(--pb-motion-enter) var(--pb-ease-settle) both;
 }
+.pb-pill:active{cursor:grabbing;}
 .pb-pill:hover{background:var(--pb-hover);border-color:var(--pb-border-hover);}
-.pb-pill-hint{cursor:default;}
+.pb-pill-hint{cursor:grab;}
 .pb-pill-hint:hover{background:var(--pb-surface);border-color:var(--pb-border);}
 .pb-pill:focus-visible{outline:2px solid var(--pb-accent);outline-offset:2px;}
 .pb-pill-dot{position:relative;flex:none;width:7px;height:7px;border-radius:50%;background:var(--pb-accent);}
@@ -1760,19 +1763,30 @@ window.__ModuleLoader__.load({
 
     function CollapsedPill(props) {
       const stats = props && props.stats;
-      const onExpand = props && props.onExpand;
       const stale = !!(props && props.stale);
+      const pos = (props && props.pos) || { left: 0, top: 0 };
+      const drag = (props && props.drag) || {};
+      const pillRef = props && props.pillRef;
       const inFlight = asNumber(stats && stats.inFlight) || 0;
       return h('div', { className: 'pb-dock' },
         h('button', {
+          ref: pillRef,
           type: 'button',
           className: 'pb-pill',
+          'data-pb-draggable': 'pill',
           'data-pb-stale': stale ? 'true' : undefined,
-          onClick: onExpand,
+          style: { left: (asNumber(pos.left) || 0) + 'px', top: (asNumber(pos.top) || 0) + 'px' },
+          onClick: drag.onClick,
+          onPointerDown: drag.onPointerDown,
+          onPointerMove: drag.onPointerMove,
+          onPointerUp: drag.onPointerUp,
+          onPointerCancel: drag.onPointerCancel,
+          onKeyDown: drag.onKeyDown,
           'aria-expanded': false,
           'aria-label': safeT('pill.expand'),
           title: stale ? safeT('tooltip.stale') : safeT('pill.expand'),
         },
+        h('span', { className: 'pb-grip', 'aria-hidden': true }, h(GripIcon)),
         h('span', { className: 'pb-pill-dot', 'aria-hidden': true }),
         h('span', { className: 'pb-pill-label' }, safeT('pill.label')),
         h('span', { className: 'pb-pill-sep', 'aria-hidden': true }, '·'),
@@ -1927,6 +1941,10 @@ window.__ModuleLoader__.load({
       const anchorRef = React.useRef(null);
 
       const cardRef = React.useRef(null);
+      /** 收起态胶囊的 DOM（PB-008：胶囊也可拖动/记忆位置）。 */
+      const pillRef = React.useRef(null);
+      /** 拖动结束浏览器会补一次 click，用它吃掉，避免「拖一下就展开」。 */
+      const suppressPillClickRef = React.useRef(false);
       const dragRef = React.useRef(null);
 
       const filtered = React.useMemo(() => {
@@ -1967,22 +1985,25 @@ window.__ModuleLoader__.load({
         }
       }, [expanded]);
 
-      // 窗口尺寸变化：重新 clamp
+      // 窗口尺寸变化 / 初次挂载：把当前形态（胶囊或卡片）夹回视口内
       React.useEffect(() => {
-        if (!expanded) return undefined;
         const onResize = () => {
           try {
-            const card = cardRef.current;
-            if (!card || typeof card.getBoundingClientRect !== 'function') return;
-            const rect = card.getBoundingClientRect();
+            const movable = expanded ? cardRef.current : pillRef.current;
+            if (!movable || typeof movable.getBoundingClientRect !== 'function') return;
+            const rect = movable.getBoundingClientRect();
             const base = pos || defaultPosition(anchorRef.current);
-            setPos(clampPosition(base.left, base.top, rect.width, rect.height));
+            const next = clampPosition(base.left, base.top, rect.width, rect.height);
+            if (!pos || next.left !== Math.round(pos.left) || next.top !== Math.round(pos.top)) {
+              setPos(next);
+            }
           } catch (error) {
             /* ignore */
           }
         };
         try {
           window.addEventListener('resize', onResize);
+          onResize();
         } catch (error) {
           return undefined;
         }
@@ -2016,9 +2037,9 @@ window.__ModuleLoader__.load({
           if (!event || (event.pointerType === 'mouse' && event.button !== 0)) return;
           const target = event.target;
           if (target && typeof target.closest === 'function' && target.closest('[data-pb-nodrag]')) return;
-          const card = cardRef.current;
-          if (!card || typeof card.getBoundingClientRect !== 'function') return;
-          const rect = card.getBoundingClientRect();
+          const movable = expanded ? cardRef.current : pillRef.current;
+          if (!movable || typeof movable.getBoundingClientRect !== 'function') return;
+          const rect = movable.getBoundingClientRect();
           dragRef.current = {
             pointerId: event.pointerId,
             startX: event.clientX,
@@ -2027,6 +2048,7 @@ window.__ModuleLoader__.load({
             top: rect.top,
             width: rect.width,
             height: rect.height,
+            element: movable,
             moved: false,
             last: { left: rect.left, top: rect.top },
           };
@@ -2044,16 +2066,16 @@ window.__ModuleLoader__.load({
         const drag = dragRef.current;
         if (!drag || !event || drag.pointerId !== event.pointerId) return;
         try {
-          const card = cardRef.current;
-          if (!card) return;
+          const movable = drag.element;
+          if (!movable) return;
           const dx = event.clientX - drag.startX;
           const dy = event.clientY - drag.startY;
           if (!drag.moved && Math.abs(dx) + Math.abs(dy) < 3) return;
           drag.moved = true;
           const next = clampPosition(drag.left + dx, drag.top + dy, drag.width, drag.height);
           drag.last = next;
-          card.style.left = next.left + 'px';
-          card.style.top = next.top + 'px';
+          movable.style.left = next.left + 'px';
+          movable.style.top = next.top + 'px';
         } catch (error) {
           /* ignore */
         }
@@ -2081,6 +2103,27 @@ window.__ModuleLoader__.load({
         }
       };
 
+      /** 胶囊拖动结束：拖过（移动≥3px）就只记位置，没拖动则视为点击 → 展开。 */
+      const handlePillPointerUp = (event) => {
+        const drag = dragRef.current;
+        const moved = !!(drag && drag.moved);
+        if (moved) suppressPillClickRef.current = true;
+        handleDragEnd(event);
+      };
+
+      /** 胶囊点击：拖动刚结束时浏览器还会补一次 click，这里吃掉它，避免「拖一下就展开」。 */
+      const handlePillClick = () => {
+        try {
+          if (suppressPillClickRef.current) {
+            suppressPillClickRef.current = false;
+            return;
+          }
+          if (!expanded) setExpanded(true);
+        } catch (error) {
+          /* ignore */
+        }
+      };
+
       /* §6.4 键盘替代：header 聚焦后 Alt + 方向键每次移动 8px */
       const handleHeaderKeyDown = (event) => {
         try {
@@ -2093,9 +2136,9 @@ window.__ModuleLoader__.load({
           };
           const delta = deltas[event.key];
           if (!delta) return;
-          const card = cardRef.current;
-          if (!card || typeof card.getBoundingClientRect !== 'function') return;
-          const rect = card.getBoundingClientRect();
+          const movable = expanded ? cardRef.current : pillRef.current;
+          if (!movable || typeof movable.getBoundingClientRect !== 'function') return;
+          const rect = movable.getBoundingClientRect();
           const base = pos || { left: rect.left, top: rect.top };
           const next = clampPosition(base.left + delta[0], base.top + delta[1], rect.width, rect.height);
           setPos(next);
@@ -2106,6 +2149,28 @@ window.__ModuleLoader__.load({
         }
       };
 
+      const effectivePos = pos || defaultPosition(anchorRef.current);
+      const floatingStyle = {
+        left: (asNumber(effectivePos.left) || 0) + 'px',
+        top: (asNumber(effectivePos.top) || 0) + 'px',
+      };
+      /** 胶囊拖动：共用同一套 handleDrag*，抬起时区分「拖」与「点」。 */
+      const pillDrag = {
+        onPointerDown: handleDragStart,
+        onPointerMove: handleDragMove,
+        onPointerUp: handlePillPointerUp,
+        onPointerCancel: handlePillPointerUp,
+        onKeyDown: handleHeaderKeyDown,
+        onClick: handlePillClick,
+      };
+      const cardDrag = {
+        onPointerDown: handleDragStart,
+        onPointerMove: handleDragMove,
+        onPointerUp: handleDragEnd,
+        onPointerCancel: handleDragEnd,
+        onKeyDown: handleHeaderKeyDown,
+      };
+
       if (sessionId === null) return null;
       if (!board) {
         // 非项目开发模式会话：没有看板就完全不占空间（原行为）。
@@ -2113,25 +2178,22 @@ window.__ModuleLoader__.load({
         const hintText = snapshot && snapshot.status === 'error' ? safeT('pill.errorRetry') : safeT('pill.waiting');
         return h('div', { className: 'pb-dock', 'data-pb-plugin': 'dsh-project-dev' },
           h('div', {
+            ref: pillRef,
             className: 'pb-pill pb-pill-hint',
             role: 'status',
             'aria-live': 'polite',
             title: hintText,
+            style: floatingStyle,
+            onPointerDown: pillDrag.onPointerDown,
+            onPointerMove: pillDrag.onPointerMove,
+            onPointerUp: pillDrag.onPointerUp,
+            onPointerCancel: pillDrag.onPointerCancel,
           },
             h('span', { className: 'pb-pill-dot', 'data-pb-tone': 'idle' }),
             h('span', { className: 'pb-pill-label' }, safeT('pill.label')),
             h('span', { className: 'pb-pill-sep' }),
             h('span', { className: 'pb-pill-stat' }, hintText)));
       }
-
-      const effectivePos = pos || defaultPosition(anchorRef.current);
-      const drag = {
-        onPointerDown: handleDragStart,
-        onPointerMove: handleDragMove,
-        onPointerUp: handleDragEnd,
-        onPointerCancel: handleDragEnd,
-        onKeyDown: handleHeaderKeyDown,
-      };
 
       return h('div', { className: 'pb-root', 'data-pb-plugin': 'dsh-project-dev' },
         h('span', { ref: anchorRef, className: 'pb-anchor', 'aria-hidden': 'true' }),
@@ -2148,7 +2210,7 @@ window.__ModuleLoader__.load({
             cardRef,
             dragging,
             stale,
-            drag,
+            drag: cardDrag,
             onFilter: setFilterId,
             onToggleItem: setOpenId,
             onCollapse: () => setExpanded(false),
@@ -2156,7 +2218,9 @@ window.__ModuleLoader__.load({
           : h(CollapsedPill, {
             stats,
             stale,
-            onExpand: () => setExpanded(true),
+            pos: effectivePos,
+            pillRef,
+            drag: pillDrag,
           }));
     }
 

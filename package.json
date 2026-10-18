@@ -1,19 +1,12 @@
 {
   "name": "dsh-project-dev",
-  "version": "0.1.2",
-  "description": "「项目开发模式」+ 开发进度看板：主对话只理解/派活，agent-team 按工种协作；聊天内悬浮看板追踪每个修改点的派单、执行、测试、验收与返工归并。",
+  "version": "0.1.3",
+  "private": true,
+  "description": "「项目开发模式」+ 开发进度看板：预设 persona/团队职责/看板守则，7 个 project_board_* 工具，只读快照路由与聊天内悬浮看板。",
   "license": "MIT",
   "type": "module",
   "main": "index.js",
   "icon": "icon.svg",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/kkomia/dsh-code-team.git"
-  },
-  "homepage": "https://github.com/kkomia/dsh-code-team#readme",
-  "bugs": {
-    "url": "https://github.com/kkomia/dsh-code-team/issues"
-  },
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
@@ -35,22 +28,17 @@
     "locale/*.json",
     "icon.svg"
   ],
-  "scripts": {
-    "test": "node --test test/"
-  },
   "engines": {
-    "node": ">=22",
-    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+    "node": ">=22"
   },
   "keywords": [
     "dsh",
     "dsh-plugin",
     "deepseek-harness",
     "agent-preset",
-    "agent-team",
     "project-board",
     "task-board",
-    "project-development"
+    "agent-team"
   ],
   "dsh": {
     "bundle": {
@@ -63,9 +51,5 @@
         "@deepseek-ai/dsh-client-ui-conversation"
       ]
     }
-  },
-  "publishConfig": {
-    "access": "public",
-    "registry": "https://registry.npmjs.org/"
   }
 }
