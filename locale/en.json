@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Project Board",
+    "description": "Companion to the Project Development agent preset: tracks every user change request on an in-chat floating board through dispatch, execution, testing, acceptance and rework, with seven project_board_* tools and a read-only snapshot route."
+  }
+}

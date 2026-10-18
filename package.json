@@ -1,0 +1,71 @@
+{
+  "name": "dsh-project-dev",
+  "version": "0.1.0",
+  "description": "「项目开发模式」+ 开发进度看板：主对话只理解/派活，agent-team 按工种协作；聊天内悬浮看板追踪每个修改点的派单、执行、测试、验收与返工归并。",
+  "license": "MIT",
+  "type": "module",
+  "main": "index.js",
+  "icon": "icon.svg",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kkomia/dsh-code-team.git"
+  },
+  "homepage": "https://github.com/kkomia/dsh-code-team#readme",
+  "bugs": {
+    "url": "https://github.com/kkomia/dsh-code-team/issues"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./board-tools": "./board-tools.js",
+    "./mode-guard": "./mode-guard.js",
+    "./guard": "./guard.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "store.js",
+    "board-tools.js",
+    "mode-guard.js",
+    "guard.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "scripts": {
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=22",
+    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "agent-preset",
+    "agent-team",
+    "project-board",
+    "task-board",
+    "project-development"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}
