@@ -1,6 +1,6 @@
 {
   "name": "dsh-project-dev",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "「项目开发模式」+ 开发进度看板：主对话只理解/派活，agent-team 按工种协作；聊天内悬浮看板追踪每个修改点的派单、执行、测试、验收与返工归并。",
   "license": "MIT",
   "type": "module",

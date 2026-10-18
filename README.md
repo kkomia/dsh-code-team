@@ -19,7 +19,7 @@
 
 1. **Lead 完全不动手**：`guard.js` 在 profile 级按 `SessionHeader.agentPreset` 识别项目开发模式 Lead，用 `agent.ctx.tools.guard()` 拒绝一切不在允许清单内的工具调用（读文件、跑命令、查网页、写文件全部拦截）；Lead 自己只用 agent-team + 看板 + ask/todo/goal/plan/present。
 2. **修改点台账**：用户每个修改点在当轮写入看板（逐字保留 `userQuote`），状态机 `pending → dispatched → running → testing → tested → accepting → accepted`，失败回退并记录 attempts。
-3. **按工种派活**：团队常设调研/规划/设计/工程进度对照/测试/验收六席，按需增设前端/后端/探索/审核；一人最多两职；成员 name 用英文昵称、显示「中文职位 · 昵称」；闲置成员即时**改定义（redefine）**复用，不扩编不辞退。
+3. **按工种派活**：团队常设调研/规划/设计/工程进度对照/测试/验收六席，按需增设前端/后端/探索/审核；一人最多两职；**成员 name 用「英文职位-英文昵称」**（如 `researcher-ada`、`frontend-cyrus`，团队面板直接可辨工种），显示「中文职位 · 昵称」；闲置成员即时**改定义（redefine）**复用，不扩编不辞退。
 4. **持续对标**：固定一份参考方案（本地源码/仓库/截图/竞品），每次大改前调研员读参考实现产出「对标差距表」，写回看板 `reference`，14 天未对标会在审计里提醒。
 5. **只用 agent-team**：项目开发模式成员看不到 subagent / subagent_fork / subagent_codex / workflow / ralph。
 
@@ -102,7 +102,7 @@ dsh plugin --profile desktop add link:<本仓库绝对路径>
 | 验收员 | 常设 | 逐条对照用户原话验收，拒绝无证据的「已完成」；兼审核 |
 | 前端 / 后端 / 探索 / 审核 | 机动 | 按需增设；一人最多两职 |
 
-成员 name 受 `spawn_teammate` 限制只能是小写英文 kebab（如 `ada`、`qianduan-cyrus`），中文职位显示在 `description`、看板 `team[]` 与成员 chip 中；`send_message` 的 `target` 必须用英文 name/target（`list_agents` 返回值），显示名只用于汇报。
+成员 name 受 `spawn_teammate` 限制只能是小写英文 kebab，因此**强制采用「英文职位-英文昵称」**（如 `researcher-ada`、`frontend-cyrus`、`tester-dora`；固定前缀：researcher/planner/designer/progress/tester/acceptance/frontend/backend/explorer/reviewer），这样团队面板（只显示 name）一眼能看出工种；中文职位写在 `description` 首段、看板 `team[]` 与成员 chip 中。`send_message` 的 `target` 必须用英文 name/target（`list_agents` 返回值），显示名只用于汇报。改职（redefine）不改 name，当前职位以 description/看板为准。
 
 ## 开发与测试
 
@@ -140,7 +140,7 @@ docs/             DESIGN.md（设计规格）、PROTOCOL.md（字段契约）、
 ## 已知限制
 
 - 运行时没有「删除 agent-team 成员」的 API：成员 name/名额记录永久保留，所以采用**即时修改成员定义（redefine 改职复用）**，不扩编、不辞退。
-- `spawn_teammate` 的 name 只接受小写英文 kebab-case；中文职位放在 description/看板中显示。
+- `spawn_teammate` 的 name 只接受小写英文 kebab-case，因此强制用「英文职位-英文昵称」（如 `researcher-ada`）让团队面板可辨工种；中文职位放在 description 首段/看板中显示。改职（redefine）不改 name，当前职位以 description/看板为准。
 - teammate 会继承 Lead 的 preset，因此工作类工具保留在 preset 里给同事用；Lead 的限制由 profile 级 `guard.js` 的 per-Agent guard 实现。
 - 看板工具只挂在项目开发模式；其他模式看不到工具，但已存在看板的会话仍会显示悬浮卡（只读）。
 - Client UI 只读；看板写入只经 agent 工具。

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1 — 2026-10-18
+
+### Changed
+
+- **teammate 命名规则改为「英文职位-英文昵称」**（如 `researcher-ada`、`frontend-cyrus`、`tester-dora`）：团队面板只显示 name，之前只有昵称无法看出工种；现在 name 自带固定职位前缀（researcher / planner / designer / progress / tester / acceptance / frontend / backend / explorer / reviewer）。
+  - `description` 首段仍为「中文职位 · 英文昵称」+ 中文职责，看板 `team[]` 与成员 chip 用中文显示。
+  - 改职（`redefine`）不改 name，当前职位以 description/看板为准。
+- 同步更新 persona、团队职责 prompt、DESIGN/MODE-TEXT/README 与运行期提示词校验测试。
+
 ## 0.1.0 — 2026-10-18
 
 首个公开版本：项目开发模式 + 开发进度看板。

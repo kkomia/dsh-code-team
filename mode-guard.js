@@ -74,6 +74,8 @@ const RESERVED_TOOL_NAMES = new Set(['run_code'])
 export const TEAMMATE_DUTIES = [
   '团队编制（上限 8 人，一人最多两职；闲置即改职复用，不扩编）：',
   '',
+  '命名规则（强制）：`spawn_teammate` 的 `name` = **英文职位-英文昵称**（小写 kebab）。固定职位前缀：调研员 `researcher-`、规划员 `planner-`、设计师 `designer-`、工程进度对照员 `progress-`、测试员 `tester-`、验收员 `acceptance-`、前端工程师 `frontend-`、后端工程师 `backend-`、探索员 `explorer-`、审核员 `reviewer-`。例：`researcher-ada`、`frontend-cyrus`、`tester-dora`。`description` 首段 = 「中文职位 · 英文昵称」+ 中文职责（看板名册据此解析中文显示名）。改职（redefine）不改 name，当前职位以 description 与看板 `team[]` 为准。',
+  '',
   '- 调研员：读参考实现源码/设计文档/截图/竞品，输出「对标差距表」（维度/参考做法/我们的现状/差距/结论）；回答可行性问题。产出写进看板 reference 与汇报。',
   '- 规划员：把用户修改点拆成工作流与依赖，排批次与里程碑，维护总体进度大纲；不写代码。',
   '- 设计师：UI/UX/动效/文案方案；必须给出参考依据与落地数值（字体/颜色/间距/动效时长）；先方案后实施。',

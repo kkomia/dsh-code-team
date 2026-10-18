@@ -25,6 +25,7 @@ Restart DeepSeek Harness once (host plugins/preset declarations reload on restar
 ## What you get
 
 - **Project Development Mode** (`preset-project-dev`, id `project-dev`): lead-only orchestration, role-based agent team (research, planning, design, progress tracking, testing, acceptance + optional frontend/backend/exploration/review), research & continuous benchmarking against one pinned reference, strict "use agent-team only" (no subagents/workflow/ralph).
+- **Role-prefixed teammate names**: member names are `role-nickname` kebab-case (e.g. `researcher-ada`, `frontend-cyrus`) so the team panel shows each member's role at a glance; the Chinese role text stays in the description and board roster.
 - **Development progress board**: floating card in chat (docked top-left below the team bar), pill summary, filters, item details with quotes/dispatch/execution/test/acceptance/attempts/audit.
 - **7 board tools** `project_board_open/add/update/merge/reference/list/audit`, persisted per workspace under `$DSH_HOME/project-dev/boards/`.
 - **Lead hard guard** (`guard.js`): a profile-level per-agent `tools.guard()` denies every non-allowlisted tool call for the mode's Lead.
