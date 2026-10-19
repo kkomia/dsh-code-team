@@ -3,7 +3,7 @@
  * ============================================================================
  * 职责（对齐 work/PROTOCOL.md §1 / §5 与 work/DESIGN.md §3.1/§3.4）：
  *   1. 提供 Host 服务 `projectBoard`（board-tools.js 通过它读写看板）：
- *        openBoard / snapshot / addItem / updateItem / mergeItems / setReference /
+ *        openBoard / snapshot / addItem / updateItem / pruneItems / mergeItems / setReference /
  *        listItems / audit。
  *   2. 注册只读 HTTP 快照路由 `GET /api/project-board/snapshot?sessionId=`，
  *      供聊天内悬浮看板（client.js）轮询。
@@ -29,6 +29,7 @@ import {
   createStore,
   listItems as listItemsOfBoard,
   mergeItems as mergeItemsOfBoard,
+  pruneItems as pruneItemsOfBoard,
   setReference as setReferenceOfBoard,
   statsOf,
   updateItem as updateItemOfBoard,
@@ -400,6 +401,33 @@ export function apply(ctx, config = {}) {
         return { board: next.board, value: { item: next.item ?? null, member: next.member ?? null } }
       })
       return { item: result.value.item, member: result.value.member, board: result.board }
+    },
+
+    /** 批量清理条目（update 工具的 prune action：按 ids / statuses / categories / 整板）。 */
+    async pruneItems(input = {}) {
+      const sessionId = input.sessionId
+      const payload = { ...input }
+      delete payload.sessionId
+      const result = await mutateBoard(sessionId, (board, at) => {
+        const next = pruneItemsOfBoard(board, payload, at)
+        return {
+          board: next.board,
+          value: {
+            mode: next.mode,
+            scope: next.scope,
+            dryRun: next.dryRun,
+            matched: next.matched,
+            matchedIds: next.matchedIds,
+            changed: next.changed,
+            changedIds: next.changedIds,
+            removedIds: next.removedIds,
+            skippedIds: next.skippedIds,
+            notFoundIds: next.notFoundIds,
+            stats: next.stats,
+          },
+        }
+      })
+      return { ...result.value, board: result.board }
     },
 
     /** 合并重复/关联条目。 */

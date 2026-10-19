@@ -21,6 +21,7 @@ import {
   listItems,
   mergeItems,
   normalizeBoard,
+  pruneItems,
   setReference,
   statsOf,
   updateItem,
@@ -443,4 +444,111 @@ test('并发写：同一 board 的 promise 队列串行化，不丢更新', asyn
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+/* ------------------------------------------------------------------ */
+/* prune：批量清理（project_board_update 的 prune action）                */
+/* ------------------------------------------------------------------ */
+
+/** 建一张 4 条、覆盖 3 个类别的看板。 */
+function boardWithFour() {
+  let board = newBoard()
+  const a = add(board, '输入框高度', '输入框太高', { category: 'UI' })
+  board = a.board
+  const b = add(board, '侧边栏折叠', '侧边栏能不能折叠', { category: '功能' })
+  board = b.board
+  const c = add(board, '暗色对比度', '暗色下字看不清', { category: 'UI' })
+  board = c.board
+  const d = add(board, '首屏加载慢', '加载太慢', { category: '性能' })
+  board = d.board
+  return { board, a: a.item, b: b.item, c: c.item, d: d.item }
+}
+
+test('prune dryRun：只预览命中，不改数据', () => {
+  const { board } = boardWithFour()
+  const result = pruneItems(board, { statuses: ['obsolete'], dryRun: true }, NOW + 1)
+  assert.equal(result.matched, 0)
+  assert.equal(result.dryRun, true)
+  assert.equal(result.board.items.length, 4, 'dryRun 不得删条目')
+})
+
+test('prune mode=delete：按 statuses 删除作废条目，其余保留', () => {
+  const { board, a } = boardWithFour()
+  const obsolete = updateItem(board, { itemId: a.id, action: 'obsolete' }, NOW + 1)
+  const result = pruneItems(obsolete.board, { statuses: ['obsolete'], mode: 'delete' }, NOW + 2)
+  assert.equal(result.matched, 1)
+  assert.deepEqual(result.removedIds, [a.id])
+  assert.equal(result.board.items.length, 3)
+  assert.equal(result.board.items.some((item) => item.id === a.id), false)
+  assert.equal(result.stats.total, 3)
+})
+
+test('prune mode=obsolete：按 categories 批量作废，保留历史记录', () => {
+  const { board } = boardWithFour()
+  const result = pruneItems(board, { categories: ['UI'], mode: 'obsolete' }, NOW + 1)
+  assert.equal(result.matched, 2)
+  assert.equal(result.changed, 2)
+  assert.equal(result.board.items.length, 4, 'obsolete 模式不删条目')
+  assert.deepEqual(
+    result.board.items.filter((item) => item.category === 'UI').map((item) => item.status),
+    ['obsolete', 'obsolete'],
+  )
+  assert.deepEqual(
+    result.board.items.filter((item) => item.category !== 'UI').map((item) => item.status),
+    ['pending', 'pending'],
+  )
+})
+
+test('prune ids：只清理指定 id，缺失 id 在 notFoundIds 返回', () => {
+  const { board, b } = boardWithFour()
+  const result = pruneItems(board, { ids: [b.id, 'PB-999'], mode: 'delete' }, NOW + 1)
+  assert.deepEqual(result.removedIds, [b.id])
+  assert.deepEqual(result.notFoundIds, ['PB-999'])
+  assert.equal(result.board.items.length, 3)
+})
+
+test('prune scope=all：delete 必须 confirm，dryRun 可预览，confirm 后清空', () => {
+  const { board } = boardWithFour()
+  assert.throws(
+    () => pruneItems(board, { scope: 'all', mode: 'delete' }, NOW + 1),
+    (error) => error.code === 'BOARD_INVALID_INPUT',
+  )
+  const preview = pruneItems(board, { scope: 'all', mode: 'delete', dryRun: true }, NOW + 2)
+  assert.equal(preview.matched, 4)
+  assert.equal(preview.board.items.length, 4, 'dryRun 不删')
+  const cleared = pruneItems(board, { scope: 'all', mode: 'delete', confirm: true }, NOW + 3)
+  assert.equal(cleared.changed, 4)
+  assert.equal(cleared.board.items.length, 0)
+  assert.equal(cleared.stats.total, 0)
+})
+
+test('prune mode=delete：清理合并目标/来源时修复 mergedInto / mergedFrom', () => {
+  const { board, a, b } = boardWithFour()
+  const merged = mergeItems(board, { sourceIds: [b.id], targetId: a.id }, NOW + 1)
+  const removedTarget = pruneItems(merged.board, { ids: [a.id], mode: 'delete' }, NOW + 2)
+  const restored = removedTarget.board.items.find((item) => item.id === b.id)
+  assert.ok(restored, '来源条目不应被连带删除')
+  assert.equal(restored.mergedInto, null)
+  assert.equal(restored.status, 'pending')
+
+  const removedSource = pruneItems(merged.board, { ids: [b.id], mode: 'delete' }, NOW + 3)
+  const target = removedSource.board.items.find((item) => item.id === a.id)
+  assert.deepEqual(target.mergedFrom, [], '来源被删后 target.mergedFrom 必须清理')
+})
+
+test('prune：无过滤 / 非法过滤 / scope=all+ids 均报错', () => {
+  const { board } = boardWithFour()
+  assert.throws(() => pruneItems(board, {}, NOW + 1), (error) => error.code === 'BOARD_INVALID_INPUT')
+  assert.throws(
+    () => pruneItems(board, { statuses: ['done'] }, NOW + 1),
+    (error) => error.code === 'BOARD_INVALID_INPUT' && /未知状态/.test(error.message),
+  )
+  assert.throws(
+    () => pruneItems(board, { categories: ['后端'], mode: 'obsolete' }, NOW + 1),
+    (error) => error.code === 'BOARD_INVALID_INPUT' && /未知类别/.test(error.message),
+  )
+  assert.throws(
+    () => pruneItems(board, { scope: 'all', ids: ['PB-001'], mode: 'delete', confirm: true }, NOW + 1),
+    (error) => error.code === 'BOARD_INVALID_INPUT',
+  )
 })

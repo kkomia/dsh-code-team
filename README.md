@@ -76,7 +76,7 @@ dsh plugin --profile desktop add link:<本仓库绝对路径>
 |---|---|
 | `project_board_open` | 打开/创建当前工作区看板，自动同步团队名册（`team[]`） |
 | `project_board_add` | 新增一个用户修改点；带 `mergeInto` 时作为该条目的新一轮返工记录 |
-| `project_board_update` | 推进状态：`dispatch / start / test / accept / reject / fail / attempt / block / obsolete / reopen / redefine / unmerge` |
+| `project_board_update` | 推进状态：`dispatch / start / test / accept / reject / fail / attempt / block / obsolete / reopen / redefine / unmerge`；另含 `prune` 批量清理（按 `ids` / `statuses` / `categories`，或 `scope:"all"` 清空整板；`dryRun` 预览、`confirm` 保护） |
 | `project_board_merge` | 把重复/关联条目并入目标条目（保留来源 id 于 `mergedFrom`，禁链式合并） |
 | `project_board_reference` | 设置/更新参考方案与对标差距表 |
 | `project_board_list` | 精简查询（状态/类别/关键词） |

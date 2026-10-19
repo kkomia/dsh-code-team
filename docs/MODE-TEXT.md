@@ -77,4 +77,4 @@
 5. **对标**：reference 记录参考方案的名称/来源/固定版本/对标差距表；超过 14 天未对标的要在 audit 中提醒。
 6. **审计**：`project_board_audit` 会列出未派单、未测试、未验收、返工≥2、待确认、对标过期。Lead 每次向用户汇报前、进度对照员每轮都要看审计结果。
 7. **写权限**：Lead 与工程进度对照员负责写看板；其他成员只读（project_board_list / project_board_audit）+ 消息汇报。
-8. **工具速查**：open 建档；add 新增（或 mergeInto 记返工）；update 推进状态/记录分派与返工/改职；merge 合并重复；reference 维护对标；list 查询；audit 完整性审计。
+8. **工具速查**：open 建档；add 新增（或 mergeInto 记返工）；update 推进状态/记录分派与返工/改职，并用 update 的 prune 批量清理（ids/statuses/categories，或 scope=all；先 dryRun 预览）；merge 合并重复；reference 维护对标；list 查询；audit 完整性审计。

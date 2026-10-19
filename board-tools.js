@@ -16,6 +16,7 @@
 import {
   ACTIONS,
   CATEGORIES,
+  ITEM_STATUSES,
   PRIORITIES,
   STAGES,
   statsOf,
@@ -185,11 +186,14 @@ export function apply(ctx, config = {}) {
       + 'accept=验收通过；reject=验收拒绝；fail/attempt=记录返工（现象/根因/修改/证据）；'
       + 'block=阻塞；obsolete=作废；reopen=重新打开；redefine=修改成员定义（改职复用，不辞退）；'
       + 'unmerge=把被合并的条目恢复为独立条目。'
+      + '\nprune=批量清理看板（不推进任务）：按 ids、statuses（如 obsolete/blocked）、categories（UI/功能/缺陷/…）过滤，'
+      + '或 scope="all" 清空整板；mode="delete"（默认）物理删除、mode="obsolete" 仅标记作废；'
+      + '清空整板必须 confirm:true，建议先 dryRun:true 预览命中条目。'
       + '\n同一问题的第 N 次返工用 fail/attempt 记进同一个条目，禁止新开条目掩盖。',
     parameters: obj(
       {
-        itemId: str('看板条目 id（如 PB-007）；redefine 时可为任意条目或省略'),
-        action: { type: 'string', enum: ACTIONS, description: '要执行的动作' },
+        itemId: str('看板条目 id（如 PB-007）；redefine 时可为任意条目或省略；prune 不需要'),
+        action: { type: 'string', enum: [...ACTIONS, 'prune'], description: '要执行的动作（prune=批量清理）' },
         stage: { type: 'string', enum: STAGES, description: 'dispatch 必填：分派环节' },
         member: str('成员，如「前端工程师 · Cyrus」「调研员 · Ada」'),
         role: str('职位（可选；dispatch 缺省按环节推导，redefine 必填新职位）'),
@@ -214,11 +218,65 @@ export function apply(ctx, config = {}) {
           },
           additionalProperties: false,
         },
+        ids: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'prune：要清理的条目 id 列表（如 ["PB-001","PB-002"]）；给出后忽略 statuses/categories',
+        },
+        statuses: {
+          type: 'array',
+          items: { type: 'string', enum: ITEM_STATUSES },
+          description: 'prune：按状态过滤（如 ["obsolete"] 或 ["blocked","pending"]）',
+        },
+        categories: {
+          type: 'array',
+          items: { type: 'string', enum: CATEGORIES },
+          description: 'prune：按类别过滤（UI/功能/缺陷/性能/文案/架构/其他）',
+        },
+        scope: {
+          type: 'string',
+          enum: ['filtered', 'all'],
+          description: 'prune：filtered=按 ids/statuses/categories 过滤（默认）；all=整板（delete 时必须 confirm:true）',
+        },
+        mode: {
+          type: 'string',
+          enum: ['delete', 'obsolete'],
+          description: 'prune：delete=从看板删除（默认）；obsolete=仅标记作废、保留历史记录',
+        },
+        dryRun: { type: 'boolean', description: 'prune：true=只返回将命中的条目，不改数据（建议先跑）' },
+        confirm: { type: 'boolean', description: 'prune：scope="all" 且 mode="delete" 时必须 true' },
       },
       ['action'],
     ),
     async execute(args, exec) {
       const sessionId = sessionIdOf(exec)
+      if (args?.action === 'prune') {
+        const result = await boardService().pruneItems({
+          sessionId,
+          ids: args?.ids,
+          statuses: args?.statuses,
+          categories: args?.categories,
+          scope: args?.scope,
+          mode: args?.mode,
+          dryRun: args?.dryRun,
+          confirm: args?.confirm,
+          note: args?.note,
+        })
+        return ok({
+          action: 'prune',
+          mode: result.mode,
+          scope: result.scope,
+          dryRun: result.dryRun,
+          matched: result.matched,
+          matchedIds: result.matchedIds,
+          changed: result.changed,
+          changedIds: result.changedIds,
+          removedIds: result.removedIds,
+          skippedIds: result.skippedIds,
+          notFoundIds: result.notFoundIds,
+          stats: result.stats,
+        })
+      }
       // DESIGN §3.3 把返工记录设计成 attempt 对象；PROTOCOL §2.2 用平铺字段。两种都接受。
       const attempt = args?.attempt && typeof args.attempt === 'object' ? args.attempt : {}
       const result = await boardService().updateItem({

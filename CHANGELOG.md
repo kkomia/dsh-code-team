@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.4 — 2026-10-19
+
+### Added
+
+- **一键批量清理看板**：`project_board_update` 新增 `prune` action（此前只能逐条 `obsolete`/`reopen`，清空 20+ 条要调 20+ 次）：
+  - 按 `statuses`（如 `["obsolete"]`）、`categories`（UI/功能/缺陷/性能/文案/架构/其他）或 `ids` 过滤；`scope:"all"` 清空整板（与 ids 互斥）。
+  - `mode:"delete"`（默认）物理删除；`mode:"obsolete"` 仅批量标记作废、保留历史。
+  - `dryRun:true` 先预览命中条目（`matched/matchedIds/skippedIds/notFoundIds`）；`scope:"all"` + `delete` 必须 `confirm:true`。
+  - 删除时自动修复合并引用：清理 `mergedFrom` 中的已删来源；`mergedInto` 指向已删目标的条目恢复为独立 `pending` 条目。
+- 单测 33 → 40：新增 7 条 prune 覆盖（dryRun、按状态删、按类别作废、按 ids、整板 confirm 保护、合并引用修复、非法参数）。
+
 ## 0.1.3 — 2026-10-18
 
 ### Changed

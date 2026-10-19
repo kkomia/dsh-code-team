@@ -26,6 +26,7 @@ export function apply(ctx, config) { ... }   // 注册 service（ctx.provide('pr
   - `async snapshot({ sessionId })` → `{ board|null }`
   - `async addItem({ sessionId, title, userQuote, detail?, category?, priority?, mergeInto?, member?, symptom?, cause?, evidence? })` → `{ item, board }`
   - `async updateItem({ sessionId, itemId, action, ...payload })` → `{ item, board }`
+  - `async pruneItems({ sessionId, ids?, statuses?, categories?, scope?, mode?, dryRun?, confirm? })` → `{ mode, scope, dryRun, matched, matchedIds, changed, changedIds, removedIds, skippedIds, notFoundIds, stats }`
   - `async mergeItems({ sessionId, sourceIds, targetId, note? })` → `{ board }`
   - `async setReference({ sessionId, name?, source?, pinnedVersion?, comparison?, lastComparedAt? })` → `{ board }`
   - `async listItems({ sessionId, status?, category?, query?, limit? })` → `{ items, stats }`
@@ -46,6 +47,7 @@ export function emptyBoard({ projectName, workspacePath, boardId }) -> board
 export function normalizeBoard(raw) -> board          // 兼容缺字段/旧版本
 export function addItem(board, input) -> { board, item }
 export function updateItem(board, input) -> { board, item }
+export function pruneItems(board, input) -> { board, mode, matched, changed, removedIds, ... }
 
 export function mergeItems(board, { sourceIds, targetId, note }) -> { board }
 export function setReference(board, patch) -> { board }
@@ -119,6 +121,21 @@ interface Attempt { round: number; member: string; role: string; symptom: string
 
 非法转移抛 `{ code:'BOARD_INVALID_TRANSITION' }`；item 不存在抛 `{ code:'BOARD_ITEM_NOT_FOUND' }`。
 
+### 2.2.1 prune（批量清理，工具层 action）
+
+`project_board_update` 的 `action:"prune"` 不进入上面的单条状态机，由 Host 直接调用 `pruneItems` 批量清理（满足「一键清理指定范围/整板」的运维需求）。
+
+筛选规则：`ids` 给出时只处理这些 id；否则按 `statuses` ∩ `categories` 过滤；`scope:"all"` 表示整板（与 ids 互斥，过滤条件为空必须显式传 all，否则报错）。
+
+| 参数 | 行为 |
+|---|---|
+| `mode:"delete"`（默认） | 从 `items[]` 物理删除；若被删条目是其他条目的 `mergedInto` 目标，那些来源恢复为 `pending` 并清空 `mergedInto`；被删来源会从相关条目的 `mergedFrom` 移除。 |
+| `mode:"obsolete"` | 只把命中条目 `status` 置 `obsolete`（已 obsolete 跳过），保留历史记录。 |
+| `dryRun:true` | 只返回将命中的条目（`matched/matchedIds/skippedIds`），不改数据。 |
+| `confirm:true` | `scope:"all"` + `mode:"delete"` 时必须显式确认；`dryRun` 预览可免 confirm。 |
+
+返回：`{ mode, scope, dryRun, matched, matchedIds, changed, changedIds, removedIds, skippedIds, notFoundIds, stats }`；`notFoundIds` 列出 ids 里不存在的条目。
+
 ### 2.3 mergeItems
 
 - 目标与来源必须存在且都不是 obsolete；来源 item 的 `mergedInto=target.id`，`status='obsolete'` 保留在数组；target.mergedFrom += 来源 id；target.attempts 追加来源 attempts（重新编号 round）并在 note 记录。禁止链式合并（来源若已 mergedInto 抛错）。
@@ -148,6 +165,7 @@ interface Attempt { round: number; member: string; role: string; symptom: string
 - `execute(args, exec)`：`exec.agent` 给出调用者，`sessionId = String(exec.agent.id)`；调用 `ctx.projectBoard.<method>({ sessionId, ...args })`；错误抛出由框架转为 isError。
 - 工具名与参数见 DESIGN.md §3.3。工具返回结构：
   - add/update → `{ ok:true, item: <摘要>, stats }`；摘要含 id/title/status/dispatchDone/execution/test/acceptance/rework 次数。
+  - prune（update 的 action）→ `{ ok:true, action:'prune', mode, scope, dryRun, matched, matchedIds, changed, changedIds, removedIds, skippedIds, notFoundIds, stats }`。
   - list → `{ ok:true, items:[摘要], stats }`
   - audit → `{ ok:true, audit, stats }`
   - open → `{ ok:true, board:{ boardId, projectName, reference, team, stats, items:[摘要] } }`

@@ -160,7 +160,7 @@ Lead 章程（双角色分流：Lead / teammate）、团队职责段、看板工
 |---|---|---|
 | `project_board_open` | 打开/创建当前工作区看板；自动登记团队名册（从 agentTeams 读取，可再补 role） | `projectName?`, `reference?` |
 | `project_board_add` | 新增一个用户修改点（记录原话）；若 `mergeInto` 给出则作为该条目的新一轮返工记录 | `title`, `userQuote`, `detail?`, `category?`, `priority?`, `mergeInto?`, `member?`, `symptom?`, `cause?`, `evidence?` |
-| `project_board_update` | 推进状态/分派环节/执行/测试/验收/返工/阻塞/改职/作废（action 驱动） | `itemId`, `action: dispatch\|start\|test\|accept\|reject\|fail\|attempt\|block\|obsolete\|reopen\|redefine\|unmerge`, `stage?`, `member?`, `role?`, `duties?`, `evidence?`, `note?`, `attempt?` |
+| `project_board_update` | 推进状态/分派环节/执行/测试/验收/返工/阻塞/改职/作废（action 驱动）；另含 `prune` 批量清理 | `itemId`, `action: dispatch\|start\|test\|accept\|reject\|fail\|attempt\|block\|obsolete\|reopen\|redefine\|unmerge\|prune`, `stage?`, `member?`, `role?`, `duties?`, `evidence?`, `note?`, `attempt?`；prune 专用：`ids?[]`, `statuses?[]`, `categories?[]`, `scope?:filtered\|all`, `mode?:delete\|obsolete`, `dryRun?`, `confirm?` |
 | `project_board_merge` | 把重复/关联条目并入目标条目（保留原 id 于 mergedFrom） | `sourceIds[]`, `targetId`, `note?` |
 | `project_board_reference` | 设置/更新「参考方案」与对标差距表（持续对标） | `name?`, `source?`, `pinnedVersion?`, `comparison?[]`, `lastComparedAt?` |
 | `project_board_list` | 精简列出条目（支持 filter：状态/类别/关键词），供 Lead 与进度对照员审计 | `status?`, `category?`, `query?`, `limit?` |

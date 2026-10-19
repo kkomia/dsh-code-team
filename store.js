@@ -70,6 +70,8 @@ export const ACTIONS = [
 ]
 /** 成员状态。 */
 export const TEAM_MEMBER_STATUSES = ['active', 'retired']
+/** prune 清理模式：delete=物理删除；obsolete=仅作废保留历史。 */
+export const PRUNE_MODES = ['delete', 'obsolete']
 /** 对标差距状态。 */
 export const COMPARISON_STATUSES = ['open', 'closed']
 
@@ -867,6 +869,130 @@ export function updateItem(board, input, now = Date.now()) {
   return { board: working, item }
 }
 
+/**
+ * 批量清理（update 工具的 prune action）。
+ * - ids 优先；否则按 statuses × categories 交集过滤；scope='all' 时整板。
+ * - mode='delete'（默认）物理删除；mode='obsolete' 仅标记作废、保留历史。
+ * - dryRun=true 只统计不改数据；scope='all'+delete 必须 confirm=true。
+ * @param {object} board
+ * @param {{ ids?: string|string[], statuses?: string|string[], categories?: string|string[], scope?: 'filtered'|'all', mode?: 'delete'|'obsolete', dryRun?: boolean, confirm?: boolean, note?: string }} input
+ * @param {number} [now]
+ * @returns {{ board: object, mode: string, scope: string, dryRun: boolean, matched: number, matchedIds: string[], changed: number, changedIds: string[], removedIds: string[], skippedIds: string[], notFoundIds: string[], stats: object }}
+ */
+export function pruneItems(board, input = {}, now = Date.now()) {
+  if (!isRecord(input)) throw boardError('BOARD_INVALID_INPUT', 'prune 参数必须是对象')
+  const at = timestamp(now, Date.now())
+  const working = cloneBoard(board)
+  const mode = text(input.mode).trim() || 'delete'
+  if (!PRUNE_MODES.includes(mode)) {
+    throw boardError('BOARD_INVALID_INPUT', `prune mode 只能是 ${PRUNE_MODES.join(' / ')}`)
+  }
+  const scope = text(input.scope).trim() || 'filtered'
+  if (scope !== 'filtered' && scope !== 'all') {
+    throw boardError('BOARD_INVALID_INPUT', 'prune scope 只能是 filtered / all')
+  }
+  const dryRun = input.dryRun === true
+  const ids = normalizePruneList(input.ids)
+  const statuses = normalizePruneAgainst(input.statuses ?? input.status, ITEM_STATUSES, '状态')
+  const categories = normalizePruneAgainst(input.categories ?? input.category, CATEGORIES, '类别')
+  if (scope === 'filtered' && ids.length === 0 && statuses.length === 0 && categories.length === 0) {
+    throw boardError('BOARD_INVALID_INPUT', 'prune 需要 ids / statuses / categories 至少一项；清空整板请显式传 scope:"all"')
+  }
+  if (scope === 'all' && ids.length > 0) {
+    throw boardError('BOARD_INVALID_INPUT', 'scope:"all" 与 ids 不能同时使用')
+  }
+  if (scope === 'all' && mode === 'delete' && input.confirm !== true && !dryRun) {
+    throw boardError(
+      'BOARD_INVALID_INPUT',
+      'scope:"all" + mode:"delete" 会清空整个看板；请先 dryRun:true 预览，再带 confirm:true 执行',
+    )
+  }
+  const items = Array.isArray(working.items) ? working.items : []
+  const allIds = new Set(items.map((item) => item.id))
+  const matches = items.filter((item) => {
+    if (ids.length > 0) return ids.includes(item.id)
+    if (statuses.length > 0 && !statuses.includes(item.status)) return false
+    if (categories.length > 0 && !categories.includes(item.category)) return false
+    return true
+  })
+  const matchedIds = matches.map((item) => item.id)
+  const notFoundIds = ids.filter((id) => !allIds.has(id))
+  const changed = matches.filter((item) => mode === 'delete' || item.status !== 'obsolete')
+  const changedIds = changed.map((item) => item.id)
+  const skippedIds = matchedIds.filter((id) => !changedIds.includes(id))
+  const summary = {
+    board: working,
+    mode,
+    scope,
+    dryRun,
+    matched: matchedIds.length,
+    matchedIds,
+    changed: 0,
+    changedIds: [],
+    removedIds: [],
+    skippedIds,
+    notFoundIds,
+    stats: statsOf(working, at),
+  }
+  if (dryRun || changedIds.length === 0) return summary
+  if (mode === 'obsolete') {
+    for (const item of changed) {
+      const previous = item.status
+      item.status = 'obsolete'
+      item.note = appendNote(item.note, text(input.note) || `prune：批量作废（原状态 ${previous}）`)
+      item.updatedAt = at
+    }
+  } else {
+    const removed = new Set(changedIds)
+    for (const item of working.items) {
+      if (removed.has(item.id)) continue
+      if (item.mergedInto && removed.has(item.mergedInto)) {
+        const mergedInto = item.mergedInto
+        item.mergedInto = null
+        item.status = 'pending'
+        item.note = appendNote(item.note, `prune：原合并目标 ${mergedInto} 已被清理，恢复为独立条目`)
+        item.updatedAt = at
+      }
+      if (Array.isArray(item.mergedFrom) && item.mergedFrom.some((id) => removed.has(id))) {
+        item.mergedFrom = item.mergedFrom.filter((id) => !removed.has(id))
+        item.updatedAt = at
+      }
+    }
+    working.items = working.items.filter((item) => !removed.has(item.id))
+  }
+  working.updatedAt = at
+  return {
+    ...summary,
+    board: working,
+    dryRun: false,
+    changed: changedIds.length,
+    changedIds,
+    removedIds: mode === 'delete' ? changedIds : [],
+    stats: statsOf(working, at),
+  }
+}
+
+/** prune 过滤参数归一：数组或逗号/空白分隔字符串。 */
+function normalizePruneList(value) {
+  if (Array.isArray(value)) return value.map((entry) => text(entry).trim()).filter(Boolean)
+  const raw = text(value).trim()
+  if (!raw) return []
+  return raw
+    .split(/[,，;；\s]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+}
+
+/** prune 过滤参数归一并校验：非法值直接报错（避免静默漏清或误清）。 */
+function normalizePruneAgainst(value, allowed, label) {
+  const list = normalizePruneList(value)
+  const invalid = list.filter((entry) => !allowed.includes(entry))
+  if (invalid.length > 0) {
+    throw boardError('BOARD_INVALID_INPUT', `prune 的未知${label}：${invalid.join('、')}；可用：${allowed.join(' / ')}`)
+  }
+  return list
+}
+
 /** redefine：更新 board.team[] 中某个成员的定义（改职复用，不辞退）。 */
 function redefineMember(working, input, at) {
   const memberKey = text(input.member).trim()
@@ -1347,6 +1473,7 @@ export default {
   STAGE_ROLES,
   ATTEMPT_OUTCOMES,
   ACTIONS,
+  PRUNE_MODES,
   boardError,
   boardIdFor,
   emptyBoard,
@@ -1354,6 +1481,7 @@ export default {
   validateItemInput,
   addItem,
   updateItem,
+  pruneItems,
   mergeItems,
   setReference,
   listItems,
